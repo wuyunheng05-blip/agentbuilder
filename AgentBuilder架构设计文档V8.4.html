@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentBuilder 架构设计文档</title>
+    <style>
+        :root {
+            /* Brand */
+            --brand: #6366f1;
+            --brand-2: #8b5cf6;
+            --brand-3: #ec4899;
+            --accent: #06b6d4;
+
+            /* Surfaces */
+            --bg: #f7f8fc;
+            --bg-soft: #eef1f8;
+            --card: #ffffff;
+            --card-soft: #fafbff;
+
+            /* Text */
+            --ink: #1a1c2e;
+            --ink-2: #5b6178;
+            --ink-3: #8b91a8;
+
+            /* Lines */
+            --line: #e8eaf2;
+            --line-2: #eef0f6;
+
+            /* Shadows */
+            --sh-xs: 0 1px 2px rgba(20,24,60,0.04);
+            --sh-sm: 0 2px 8px rgba(20,24,60,0.06);
+            --sh-md: 0 8px 24px rgba(20,24,60,0.08);
+            --sh-lg: 0 18px 48px rgba(20,24,60,0.12);
+            --sh-glow: 0 8px 32px rgba(99,102,241,0.18);
+
+            --r: 18px;
+            --r-sm: 12px;
+            --r-xs: 9px;
+
+            /* Layer palette (refined, harmonious) */
+            --c-api: #4f7cff;
+            --c-builder: #8b5cf6;
+            --c-runtime: #0ea5e9;
+            --c-reasoning: #f59e0b;
+            --c-tool: #10b981;
+            --c-memory: #ec4899;
+            --c-multi: #14b8a6;
+            --c-model: #6366f1;
+            --c-govern: #f43f5e;
+            --c-observe: #fb923c;
+            --c-evolve: #a855f7;
+            --c-infra: #64748b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background:
+                radial-gradient(1200px 600px at 80% -10%, rgba(139,92,246,0.08), transparent 60%),
+                radial-gradient(1000px 500px at -10% 10%, rgba(6,182,212,0.07), transparent 55%),
+                var(--bg);
+            color: var(--ink);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ============ Hero ============ */
+        .hero {
+            position: relative;
+            padding: 90px 32px 110px;
+            text-align: center;
+            overflow: hidden;
+            background:
+                radial-gradient(900px 500px at 50% -40%, rgba(255,255,255,0.18), transparent 60%),
+                linear-gradient(135deg, #4338ca 0%, #6366f1 35%, #8b5cf6 65%, #d946ef 100%);
+        }
+        .hero::before {
+            content: '';
+            position: absolute; inset: 0;
+            background-image:
+                radial-gradient(circle at 1px 1px, rgba(255,255,255,0.10) 1px, transparent 0);
+            background-size: 28px 28px;
+            opacity: 0.6;
+        }
+        .hero::after {
+            content: '';
+            position: absolute;
+            left: 0; right: 0; bottom: -1px;
+            height: 80px;
+            background: linear-gradient(to bottom, transparent, var(--bg));
+        }
+        .hero-inner { position: relative; z-index: 2; }
+        .hero .eyebrow {
+            display: inline-block;
+            font-size: 0.78em;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.78);
+            border: 1px solid rgba(255,255,255,0.25);
+            padding: 5px 16px;
+            border-radius: 30px;
+            margin-bottom: 22px;
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(8px);
+        }
+        .hero h1 {
+            font-size: 3em;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -1px;
+            line-height: 1.15;
+            text-shadow: 0 4px 24px rgba(0,0,0,0.15);
+        }
+        .hero .tagline {
+            color: rgba(255,255,255,0.9);
+            font-size: 1.18em;
+            margin-top: 16px;
+            font-weight: 400;
+        }
+        .hero .badges {
+            margin-top: 28px;
+            display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+        }
+        .hero .badge {
+            background: rgba(255,255,255,0.14);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.22);
+            color: #fff;
+            padding: 7px 16px;
+            border-radius: 30px;
+            font-size: 0.82em;
+            font-weight: 500;
+            transition: transform 0.2s, background 0.2s;
+        }
+        .hero .badge:hover { transform: translateY(-2px); background: rgba(255,255,255,0.24); }
+
+        /* ============ Nav ============ */
+        .nav-bar {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(255,255,255,0.82);
+            backdrop-filter: saturate(180%) blur(14px);
+            border-bottom: 1px solid var(--line);
+            box-shadow: var(--sh-xs);
+        }
+        .nav-inner {
+            max-width: 1180px; margin: 0 auto;
+            display: flex; gap: 4px; padding: 11px 24px;
+            overflow-x: auto; scrollbar-width: none;
+        }
+        .nav-inner::-webkit-scrollbar { display: none; }
+        .nav-link {
+            white-space: nowrap;
+            padding: 7px 15px;
+            border-radius: 9px;
+            font-size: 0.83em;
+            font-weight: 600;
+            color: var(--ink-2);
+            text-decoration: none;
+            transition: all 0.18s;
+        }
+        .nav-link:hover {
+            background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12));
+            color: var(--brand);
+        }
+
+        /* ============ Main ============ */
+        .main { max-width: 1180px; margin: 0 auto; padding: 56px 24px; }
+
+        .section { margin-bottom: 64px; scroll-margin-top: 70px; }
+        .section-title {
+            font-size: 1.7em;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+            margin-bottom: 26px;
+            display: flex; align-items: center; gap: 14px;
+        }
+        .section-title .icon {
+            width: 46px; height: 46px;
+            border-radius: 13px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3em; color: #fff; flex-shrink: 0;
+            box-shadow: var(--sh-md);
+        }
+        .section-title .num {
+            font-size: 0.5em;
+            color: var(--ink-3);
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-left: auto;
+        }
+
+        /* ============ Card ============ */
+        .card {
+            background: var(--card);
+            border-radius: var(--r);
+            box-shadow: var(--sh-sm);
+            border: 1px solid var(--line);
+            padding: 32px;
+            margin-bottom: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card h3 { font-size: 1.18em; font-weight: 700; margin-bottom: 14px; }
+        .card h4 {
+            font-size: 0.98em; font-weight: 700; margin: 22px 0 10px;
+            color: var(--ink); display: flex; align-items: center; gap: 8px;
+        }
+        .card h4::before {
+            content: ''; width: 4px; height: 16px; border-radius: 4px;
+            background: linear-gradient(var(--brand), var(--brand-2));
+        }
+        .card p, .card li { color: var(--ink-2); font-size: 0.93em; }
+        .card ul { padding-left: 20px; }
+        .card li { margin: 6px 0; }
+        .lead {
+            font-size: 1.04em !important; color: var(--ink) !important; line-height: 1.85;
+        }
+
+        /* ============ Architecture Stack ============ */
+        .arch-stack { display: flex; flex-direction: column; gap: 7px; }
+        .arch-layer {
+            background: var(--card);
+            border-radius: var(--r-sm);
+            padding: 17px 22px;
+            box-shadow: var(--sh-xs);
+            border: 1px solid var(--line);
+            display: flex; align-items: center; gap: 15px;
+            position: relative;
+            transition: transform 0.16s, box-shadow 0.16s;
+            overflow: hidden;
+        }
+        .arch-layer::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+            width: 5px; background: var(--lc, var(--brand));
+        }
+        .arch-layer::after {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+            width: 100%;
+            background: linear-gradient(90deg, var(--lc, var(--brand)), transparent 40%);
+            opacity: 0.05; pointer-events: none;
+        }
+        .arch-layer:hover {
+            transform: translateX(6px);
+            box-shadow: var(--sh-md);
+        }
+        .arch-layer .al-icon {
+            width: 38px; height: 38px; border-radius: 11px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.05em; color: #fff; flex-shrink: 0;
+            box-shadow: var(--sh-sm);
+            z-index: 1;
+        }
+        .arch-layer .al-content { flex: 1; z-index: 1; }
+        .arch-layer .al-title { font-weight: 800; font-size: 0.97em; }
+        .arch-layer .al-desc { font-size: 0.83em; color: var(--ink-2); margin-top: 3px; }
+        .arch-arrow {
+            text-align: center; color: #c5cadd; font-size: 0.8em;
+            letter-spacing: 16px; margin: -3px 0 -3px 16px;
+        }
+
+        /* ============ Grids ============ */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+        @media (max-width: 920px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+        /* ============ Mini Cards ============ */
+        .mini-card {
+            background: var(--card-soft);
+            border: 1px solid var(--line);
+            border-radius: var(--r-sm);
+            padding: 16px 18px;
+            transition: transform 0.16s, box-shadow 0.16s, border-color 0.16s;
+        }
+        .mini-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--sh-md);
+            border-color: rgba(99,102,241,0.3);
+        }
+        .mini-card strong {
+            display: block; font-size: 0.92em; margin-bottom: 5px; color: var(--ink);
+        }
+        .mini-card span, .mini-card p {
+            font-size: 0.83em; color: var(--ink-2); line-height: 1.55; margin: 0;
+        }
+        .mc-accent { border-top: 3px solid var(--mc, var(--brand)); }
+
+        /* ============ Split layout ============ */
+        .split-layout {
+            display: grid; grid-template-columns: 1fr 290px; gap: 18px; align-items: start;
+        }
+        @media (max-width: 1000px) { .split-layout { grid-template-columns: 1fr; } }
+        .side-title {
+            font-size: 0.75em; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--ink-3); margin: 0 0 4px 4px;
+        }
+
+        /* ============ Flow ============ */
+        .flow-row {
+            display: flex; align-items: stretch; justify-content: center;
+            flex-wrap: wrap; gap: 0; padding: 12px 0;
+        }
+        .flow-node {
+            padding: 12px 16px; border-radius: 12px;
+            font-size: 0.79em; font-weight: 700; text-align: center; color: #fff;
+            min-width: 92px; line-height: 1.35;
+            box-shadow: var(--sh-sm);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .flow-arrow { color: #b8bedb; font-size: 1.25em; margin: 0 6px; align-self: center; }
+
+        /* ============ Pipeline ============ */
+        .pipeline { display: flex; align-items: stretch; gap: 6px; padding: 12px 0; overflow-x: auto; }
+        .pipeline-phase {
+            flex: 1; min-width: 120px; padding: 16px 12px; border-radius: 12px;
+            text-align: center; font-size: 0.8em; color: #fff; font-weight: 700;
+            display: flex; flex-direction: column; gap: 5px;
+            box-shadow: var(--sh-sm);
+            position: relative;
+        }
+        .pipeline-phase small { font-weight: 400; opacity: 0.9; font-size: 0.88em; }
+        .pipeline-phase:not(:last-child)::after {
+            content: '›'; position: absolute; right: -8px; top: 50%;
+            transform: translateY(-50%); color: #c5cadd; font-size: 1.4em; z-index: 2; font-weight: 700;
+        }
+
+        /* ============ Tables ============ */
+        table {
+            width: 100%; border-collapse: separate; border-spacing: 0;
+            font-size: 0.88em; margin: 14px 0;
+            border-radius: var(--r-sm); overflow: hidden;
+            box-shadow: var(--sh-xs); border: 1px solid var(--line);
+        }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--line-2); }
+        th {
+            background: linear-gradient(135deg, #f3f4fd, #eef1fb);
+            font-weight: 700; color: var(--ink); font-size: 0.95em;
+        }
+        td { color: var(--ink-2); }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr { transition: background 0.12s; }
+        tbody tr:hover td { background: #f8f9ff; }
+
+        /* ============ Code ============ */
+        code {
+            background: #eef0fb; color: #5b4bd6; padding: 2px 7px; border-radius: 6px;
+            font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace; font-size: 0.85em;
+        }
+        pre {
+            background: linear-gradient(135deg, #1e2030, #252840);
+            color: #e4e7f5; padding: 20px 24px; border-radius: var(--r-sm);
+            overflow-x: auto; font-size: 0.83em; line-height: 1.6; margin: 16px 0;
+            box-shadow: var(--sh-md); border: 1px solid rgba(255,255,255,0.06);
+        }
+        pre code { background: none; padding: 0; color: inherit; }
+
+        /* ============ Callout ============ */
+        .callout {
+            padding: 15px 20px; border-radius: var(--r-sm); margin: 16px 0; font-size: 0.88em;
+            display: flex; gap: 12px; align-items: flex-start;
+        }
+        .callout .ico { font-size: 1.2em; flex-shrink: 0; }
+        .callout-info { background: linear-gradient(135deg, #eff4ff, #f0eeff); border: 1px solid #dce3ff; }
+        .callout-warn { background: linear-gradient(135deg, #fff8eb, #fff3e0); border: 1px solid #ffe8c2; }
+
+        /* ============ Principles ============ */
+        .principle {
+            padding: 22px;
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: var(--r-sm);
+            position: relative; overflow: hidden;
+            transition: transform 0.18s, box-shadow 0.18s;
+        }
+        .principle:hover { transform: translateY(-4px); box-shadow: var(--sh-glow); }
+        .principle .p-num {
+            position: absolute; top: 12px; right: 16px;
+            font-size: 2.4em; font-weight: 800; color: rgba(99,102,241,0.08); line-height: 1;
+        }
+        .principle strong { color: var(--brand); font-size: 1em; position: relative; z-index: 1; }
+        .principle p { font-size: 0.85em; color: var(--ink-2); margin-top: 6px; position: relative; z-index: 1; }
+
+        /* feature pills in overview */
+        .feat {
+            display: flex; gap: 12px; align-items: flex-start;
+            padding: 16px; border-radius: var(--r-sm);
+            background: var(--card-soft); border: 1px solid var(--line);
+            transition: transform 0.16s, box-shadow 0.16s;
+        }
+        .feat:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
+        .feat .fico {
+            width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 1.2em;
+            background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12));
+        }
+        .feat strong { display: block; font-size: 0.92em; margin-bottom: 2px; }
+        .feat span { font-size: 0.82em; color: var(--ink-2); }
+
+        /* ============ Footer ============ */
+        .footer {
+            text-align: center; padding: 48px 24px;
+            color: var(--ink-3); font-size: 0.84em;
+            border-top: 1px solid var(--line); margin-top: 40px;
+            background: var(--card-soft);
+        }
+        .footer .dots { margin-bottom: 10px; font-size: 1.4em; letter-spacing: 4px; }
+        .footer .dots span { display: inline-block; }
+
+        /* fade-in */
+        @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        .section { animation: rise 0.5s ease both; }
+    </style>
+</head>
+<body>
+
+<!-- ===== Hero ===== -->
+<div class="hero">
+    <div class="hero-inner">
+        <span class="eyebrow">Architecture Design · 架构设计</span>
+        <h1>AgentBuilder 架构设计</h1>
+        <div class="tagline">AI Agent 运行时框架 — 构建 · 推理 · 协作 · 进化</div>
+        <div class="badges">
+            <span class="badge">Java 8</span>
+            <span class="badge">Reactor 响应式</span>
+            <span class="badge">ReAct 推理</span>
+            <span class="badge">多智能体协作</span>
+            <span class="badge">OpenTelemetry</span>
+            <span class="badge">SPI 可扩展</span>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Nav ===== -->
+<div class="nav-bar">
+    <div class="nav-inner">
+        <a class="nav-link" href="#overview">概览</a>
+        <a class="nav-link" href="#principles">设计原则</a>
+        <a class="nav-link" href="#arch-diagram">架构全景</a>
+        <a class="nav-link" href="#exec-flow">执行流程</a>
+        <a class="nav-link" href="#reasoning">推理引擎</a>
+        <a class="nav-link" href="#tools">工具系统</a>
+        <a class="nav-link" href="#memory">记忆系统</a>
+        <a class="nav-link" href="#multi-agent">多智能体</a>
+        <a class="nav-link" href="#governance">治理安全</a>
+        <a class="nav-link" href="#storage">存储层</a>
+        <a class="nav-link" href="#observability">可观测性</a>
+        <a class="nav-link" href="#extension">扩展机制</a>
+        <a class="nav-link" href="#data-model">数据模型</a>
+        <a class="nav-link" href="#tech-stack">技术栈</a>
+    </div>
+</div>
+
+<div class="main">
+
+<!-- ========== 1. Overview ========== -->
+<div class="section" id="overview">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-api),#6ea0ff)">📋</div>
+        项目概览
+        <span class="num">01</span>
+    </div>
+    <div class="card">
+        <p class="lead">
+            <strong>AgentBuilder</strong> 是一个面向开发者的 AI Agent 运行时框架，提供从智能体声明式构建、
+            ReAct 推理执行、工具调用、多智能体协作到全链路可观测的完整能力。
+            它不是传统 Web 应用，而是 LLM 驱动智能体的执行引擎。
+        </p>
+        <div class="grid-4" style="margin-top:24px;">
+            <div class="feat"><div class="fico">🏗️</div><div><strong>声明式构建</strong><span>Builder API + YAML/JSON 定义</span></div></div>
+            <div class="feat"><div class="fico">🧠</div><div><strong>ReAct 推理</strong><span>Think → Act → Observe 迭代循环</span></div></div>
+            <div class="feat"><div class="fico">🔧</div><div><strong>丰富工具</strong><span>内置 + MCP + 知识 + 自定义</span></div></div>
+            <div class="feat"><div class="fico">🤝</div><div><strong>多体协作</strong><span>子智能体 / 远程 / 工作流 / 规划</span></div></div>
+            <div class="feat"><div class="fico">💾</div><div><strong>三层记忆</strong><span>工作 / 情节 / 语义记忆</span></div></div>
+            <div class="feat"><div class="fico">⏸️</div><div><strong>断点恢复</strong><span>快照持久化，长任务可续接</span></div></div>
+            <div class="feat"><div class="fico">📊</div><div><strong>全链路可观测</strong><span>追踪 + 指标 + 日志</span></div></div>
+            <div class="feat"><div class="fico">🛡️</div><div><strong>治理安全</strong><span>认证/授权/配额/脱敏/沙箱</span></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 2. Principles ========== -->
+<div class="section" id="principles">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-builder),#a78bfa)">💡</div>
+        架构设计原则
+        <span class="num">02</span>
+    </div>
+    <div class="grid-3">
+        <div class="principle"><span class="p-num">01</span><strong>SPI 优先</strong><p>全局 Configuration 接口作为扩展入口，所有核心组件可通过 Java SPI 替换</p></div>
+        <div class="principle"><span class="p-num">02</span><strong>流式优先</strong><p>所有执行结果以响应式事件流返回，支持实时消费和背压控制</p></div>
+        <div class="principle"><span class="p-num">03</span><strong>关注点分离</strong><p>钩子（只读观察生命周期）与拦截器（可变换 I/O）严格职责区分</p></div>
+        <div class="principle"><span class="p-num">04</span><strong>渐进复杂度</strong><p>LLM 自主判断任务复杂度，决定是否从单步推理升级为规划执行</p></div>
+        <div class="principle"><span class="p-num">05</span><strong>组合装配</strong><p>Builder 收集配置、Assembler 装配组件，运行时不可变，避免深层继承</p></div>
+        <div class="principle"><span class="p-num">06</span><strong>可靠性兜底</strong><p>Outbox 事件投递 + 快照断点 + 熔断/限流/重试三板斧</p></div>
+    </div>
+</div>
+
+<!-- ========== 3. Architecture Diagram ========== -->
+<div class="section" id="arch-diagram">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-runtime),#38bdf8)">🏛️</div>
+        架构全景图
+        <span class="num">03</span>
+    </div>
+
+    <div class="split-layout">
+        <div>
+            <div class="side-title">主执行链路（自上而下）</div>
+            <div class="arch-stack">
+                <div class="arch-layer" style="--lc: var(--c-api)">
+                    <div class="al-icon" style="background:var(--c-api)">📡</div>
+                    <div class="al-content"><div class="al-title">API 层</div>
+                        <div class="al-desc">声明式构建器 · 流式执行入口 · 会话续接 · 断点恢复 · YAML/JSON 定义</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-builder)">
+                    <div class="al-icon" style="background:var(--c-builder)">🏗️</div>
+                    <div class="al-content"><div class="al-title">构建与装配层</div>
+                        <div class="al-desc">配置收集 → 组件装配 → 依赖注入 → 不可变运行时实例</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-runtime)">
+                    <div class="al-icon" style="background:var(--c-runtime)">⚙️</div>
+                    <div class="al-content"><div class="al-title">运行时编排层</div>
+                        <div class="al-desc">执行上下文 · 拦截器链 · 生命周期钩子 · 前置守卫 · 输入预处理 · 快照管理</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-reasoning)">
+                    <div class="al-icon" style="background:var(--c-reasoning)">🧠</div>
+                    <div class="al-content"><div class="al-title">推理引擎层</div>
+                        <div class="al-desc">ReAct 阶段管线 · 预检 · 思考 · 行动 · 终止决策 · 反思 · 自一致验证</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-tool)">
+                    <div class="al-icon" style="background:var(--c-tool)">🔧</div>
+                    <div class="al-content"><div class="al-title">工具系统</div>
+                        <div class="al-desc">工具网关 · 策略引擎 · 内置工具 · MCP · 知识检索 · 人工审批 · 产物管理</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-memory)">
+                    <div class="al-icon" style="background:var(--c-memory)">💾</div>
+                    <div class="al-content"><div class="al-title">记忆系统</div>
+                        <div class="al-desc">三层记忆（工作/情节/语义） · 记忆整合 · 上下文窗口 · 自动压缩</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-model)">
+                    <div class="al-icon" style="background:var(--c-model)">🤖</div>
+                    <div class="al-content"><div class="al-title">模型抽象层</div>
+                        <div class="al-desc">可插拔模型后端 · 多模型策略 · 协议适配 · 韧性保障 · 拦截代理</div></div>
+                </div>
+                <div class="arch-arrow">▼</div>
+                <div class="arch-layer" style="--lc: var(--c-infra)">
+                    <div class="al-icon" style="background:var(--c-infra)">🗄️</div>
+                    <div class="al-content"><div class="al-title">基础设施层</div>
+                        <div class="al-desc">多后端存储 · 事件总线 · 响应式流引擎 · 线程池 · SPI 加载 · 序列化</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="side-title">横切关注点（贯穿全栈）</div>
+            <div style="display:flex; flex-direction:column; gap:9px;">
+                <div class="arch-layer" style="--lc: var(--c-multi)">
+                    <div class="al-icon" style="background:var(--c-multi)">🤝</div>
+                    <div class="al-content"><div class="al-title">多智能体协作</div>
+                        <div class="al-desc">子智能体 · 远程A2A · 工作流 · 规划</div></div>
+                </div>
+                <div class="arch-layer" style="--lc: var(--c-govern)">
+                    <div class="al-icon" style="background:var(--c-govern)">🛡️</div>
+                    <div class="al-content"><div class="al-title">治理与安全</div>
+                        <div class="al-desc">认证授权 · 配额 · 脱敏 · 熔断 · 沙箱</div></div>
+                </div>
+                <div class="arch-layer" style="--lc: var(--c-observe)">
+                    <div class="al-icon" style="background:var(--c-observe)">📊</div>
+                    <div class="al-content"><div class="al-title">可观测性</div>
+                        <div class="al-desc">追踪 · 指标 · 日志 · 轨迹存储</div></div>
+                </div>
+                <div class="arch-layer" style="--lc: var(--c-evolve)">
+                    <div class="al-icon" style="background:var(--c-evolve)">🧬</div>
+                    <div class="al-content"><div class="al-title">自进化</div>
+                        <div class="al-desc">经验收集 · 策略优化 · 技能进化</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 4. Execution Flow ========== -->
+<div class="section" id="exec-flow">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-runtime),#22d3ee)">🔄</div>
+        核心执行流程
+        <span class="num">04</span>
+    </div>
+    <div class="card">
+        <div class="flow-row">
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-api),#6ea0ff)">用户输入</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-runtime),#38bdf8)">状态校验<br>&amp; 前置守卫</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-runtime),#38bdf8)">输入预处理<br>脱敏·记忆注入</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-reasoning),#fbbf24)">推理循环<br>Think·Act·Reflect</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-tool),#34d399)">工具执行<br>网关全链路</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-reasoning),#fbbf24)">终止决策<br>自一致验证</div>
+            <span class="flow-arrow">→</span>
+            <div class="flow-node" style="background:linear-gradient(135deg,var(--c-api),#6ea0ff)">流式事件<br>输出</div>
+        </div>
+        <p style="text-align:center; color:var(--ink-3); font-size:0.84em; margin-top:10px;">
+            推理循环可迭代多轮 · 每轮 LLM 自主决定：继续调用工具 / 给出最终答案 / 升级为规划模式
+        </p>
+
+        <h4>执行链路详解</h4>
+        <table>
+            <thead><tr><th style="width:60px">步骤</th><th style="width:110px">层次</th><th>动作</th></tr></thead>
+            <tbody>
+            <tr><td>1</td><td>API</td><td>调用 <code>agent.run(input)</code>，校验状态机为可执行状态</td></tr>
+            <tr><td>2</td><td>运行时</td><td>创建独立执行上下文：消息历史副本、Token 预算、递归深度</td></tr>
+            <tr><td>3</td><td>运行时</td><td>注入生命周期钩子，检查递归/配额守卫（不满足则快速失败）</td></tr>
+            <tr><td>4</td><td>运行时</td><td>输入预处理：敏感数据脱敏 → 记忆注入 → 上下文提供者链</td></tr>
+            <tr><td>5</td><td>推理</td><td>进入 ReAct 推理循环，阶段管线驱动 Phase 链</td></tr>
+            <tr><td>6</td><td>推理</td><td>思考阶段：构造 Prompt → 调用 LLM → 解析决策</td></tr>
+            <tr><td>7</td><td>工具</td><td>行动阶段：通过工具网关执行 LLM 决定的工具调用</td></tr>
+            <tr><td>8</td><td>推理</td><td>终止决策：最终答案 / 继续 / 无动作修正</td></tr>
+            <tr><td>9</td><td>运行时</td><td>后处理：产物总结、Self-Consistency、Token 记账、钩子通知</td></tr>
+            <tr><td>10</td><td>API</td><td>流式返回事件：RUN_START → THINKING → TOOL_CALL → CONTENT_DELTA → FINAL</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ========== 5. Reasoning Engine ========== -->
+<div class="section" id="reasoning">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-reasoning),#fbbf24)">🧠</div>
+        推理引擎
+        <span class="num">05</span>
+    </div>
+    <div class="card">
+        <h3>ReAct 阶段管线</h3>
+        <p>推理引擎采用编排器驱动 Phase 链的模式，每轮迭代按顺序执行各阶段，
+        每个阶段返回控制流指令（继续 / 终止 / 异步边界 / 重试 / 下一轮）。</p>
+
+        <div class="pipeline" style="margin-top:18px;">
+            <div class="pipeline-phase" style="background:linear-gradient(135deg,#92400e,#b45309)">预检<small>Token · 时间 · 深度</small></div>
+            <div class="pipeline-phase" style="background:linear-gradient(135deg,#b45309,#d97706)">思考<small>Prompt → LLM</small></div>
+            <div class="pipeline-phase" style="background:linear-gradient(135deg,#d97706,#f59e0b)">行动<small>工具网关执行</small></div>
+            <div class="pipeline-phase" style="background:linear-gradient(135deg,#ca8a04,#eab308)">终止决策<small>答案/继续/修正</small></div>
+            <div class="pipeline-phase" style="background:linear-gradient(135deg,#a16207,#ca8a04)">反思<small>步骤质量评估</small></div>
+        </div>
+
+        <h4>控制流模型</h4>
+        <pre><code>while (iteration <= maxIterations) {
+    for (Phase phase : phases) {
+        PhaseResult result = phase.execute(context, sink);
+        switch (result.action) {
+            CONTINUE        → 执行下一个 Phase
+            TERMINATE       → 完成流，退出
+            ASYNC_BOUNDARY  → Phase 自管回调，退出同步循环
+            RETRY_ITERATION → 从头重试本轮
+            NEXT_ITERATION  → 进入下一轮
+        }
+    }
+}</code></pre>
+
+        <h4>关键机制</h4>
+        <div class="grid-2" style="margin-top:12px;">
+            <div class="mini-card"><strong>异步边界恢复</strong><span>思考/行动阶段为异步执行，在回调中恢复管线推进</span></div>
+            <div class="mini-card"><strong>终止决策</strong><span>工具调用→继续迭代 / 最终答案→终止 / 无动作→注入修正重试</span></div>
+            <div class="mini-card"><strong>自一致性验证</strong><span>低置信度答案触发多次 LLM 采样，多数投票确认可靠性</span></div>
+            <div class="mini-card"><strong>迭代轨迹记录</strong><span>每轮记录：决策类型、工具列表、耗时、Token、是否模式升级</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 6. Tool System ========== -->
+<div class="section" id="tools">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-tool),#34d399)">🔧</div>
+        工具系统
+        <span class="num">06</span>
+    </div>
+    <div class="card">
+        <h3>工具网关架构</h3>
+        <p>统一工具调用入口，所有工具调用经过完整执行链路：</p>
+        <pre><code>权限检查 → 策略校验 → 拦截器前置 → 参数校验 → 执行 → 重试 → 拦截器后置 → 审计记录</code></pre>
+
+        <h4>工具分类</h4>
+        <table>
+            <thead><tr><th>类别</th><th>能力</th><th>说明</th></tr></thead>
+            <tbody>
+            <tr><td>规划执行</td><td>任务分解 + Worker 并行执行</td><td>LLM 自主决定何时升级为规划模式</td></tr>
+            <tr><td>任务委派</td><td>单任务委派给子智能体</td><td>简单场景无需完整规划</td></tr>
+            <tr><td>代码沙箱</td><td>隔离环境执行代码</td><td>bwrap namespace + 多租户目录隔离</td></tr>
+            <tr><td>文件操作</td><td>文件读写、目录管理</td><td>沙箱内文件系统操作</td></tr>
+            <tr><td>网络请求</td><td>HTTP 调用</td><td>外部 API 集成</td></tr>
+            <tr><td>知识检索</td><td>RAG 能力</td><td>单库直连 / 多知识库聚合路由</td></tr>
+            <tr><td>人工审批</td><td>HITL 暂停确认</td><td>高风险操作前等待人工批准</td></tr>
+            <tr><td>MCP 工具</td><td>外部 MCP Server</td><td>Stdio 连接，动态发现远程工具</td></tr>
+            <tr><td>自定义工具</td><td>业务扩展</td><td>通过 ToolProvider SPI 注册</td></tr>
+            </tbody>
+        </table>
+
+        <h4>策略引擎</h4>
+        <div class="grid-4" style="margin-top:8px;">
+            <div class="mini-card mc-accent" style="--mc:var(--c-tool)"><strong>权限控制</strong><span>按智能体实例和工具名检查</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-govern)"><strong>风险等级</strong><span>工具标注风险级别，高风险触发 HITL</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-reasoning)"><strong>预算分配</strong><span>Token/时间预算按工具类型分配</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-model)"><strong>结果缓存</strong><span>幂等工具结果缓存，避免重复调用</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 7. Memory System ========== -->
+<div class="section" id="memory">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-memory),#f472b6)">💾</div>
+        记忆系统
+        <span class="num">07</span>
+    </div>
+    <div class="card">
+        <h3>三层记忆架构</h3>
+        <div class="grid-3" style="margin-top:12px;">
+            <div class="mini-card mc-accent" style="--mc:#f472b6"><strong>工作记忆 (Working)</strong><span>当前对话的短期上下文，每轮推理直接使用</span></div>
+            <div class="mini-card mc-accent" style="--mc:#c084fc"><strong>情节记忆 (Episodic)</strong><span>按时间/重要性索引的历史事件，支持相关性检索</span></div>
+            <div class="mini-card mc-accent" style="--mc:#818cf8"><strong>语义记忆 (Semantic)</strong><span>向量化知识片段（含 embedding），支持语义相似搜索</span></div>
+        </div>
+
+        <h4>核心组件</h4>
+        <table>
+            <thead><tr><th>组件</th><th>职责</th></tr></thead>
+            <tbody>
+            <tr><td>分层存储</td><td>统一管理三层记忆的读写，底层委托给持久化后端</td></tr>
+            <tr><td>记忆整合器</td><td>异步线程池执行，将重要工作记忆转移到长期层</td></tr>
+            <tr><td>上下文管理器</td><td>滑动窗口（默认 10 轮），控制对话历史长度</td></tr>
+            <tr><td>自动压缩守卫</td><td>执行前检测上下文长度，超出阈值时自动压缩</td></tr>
+            <tr><td>Token 管理器</td><td>本地 Token 用量追踪与预算控制</td></tr>
+            <tr><td>BM25 检索</td><td>基于 BM25 算法的记忆条目相关性排序</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ========== 8. Multi-Agent ========== -->
+<div class="section" id="multi-agent">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-multi),#2dd4bf)">🤝</div>
+        多智能体协作
+        <span class="num">08</span>
+    </div>
+    <div class="card">
+        <h3>四种协作模式</h3>
+        <div class="grid-2" style="margin-top:12px;">
+            <div class="mini-card mc-accent" style="--mc:var(--c-api)"><strong>子智能体 (SubAgent)</strong><span>封装为工具注册到编排者，由编排者 LLM 自主决定何时调用。每个子智能体拥有独立上下文和记忆，支持多轮对话协议（NEEDS_CLARIFICATION）。</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-tool)"><strong>远程智能体 (RemoteAgent)</strong><span>通过 A2A（Agent-to-Agent）协议 HTTP 通信，支持自定义认证和连接池，实现跨服务边界的智能体调用。</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-builder)"><strong>工作流编排 (Workflow)</strong><span>用户预定义的有向无环图（DAG）流程，支持顺序、并行、条件分支、循环执行，节点可暂停等待人工审批。</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-reasoning)"><strong>自主规划执行 (PlanAndExecute)</strong><span>内置规划工具，LLM 判断任务复杂度后自行决定升级。任务分解 → 分配给 Worker 并行/串行执行。</span></div>
+        </div>
+
+        <h4>关键机制</h4>
+        <div class="grid-2" style="margin-top:8px;">
+            <div class="mini-card"><strong>递归深度控制</strong><span>通过递归上下文管理嵌套调用深度（默认 max=2），到达上限快速失败</span></div>
+            <div class="mini-card"><strong>事件实时转发</strong><span>子执行单元的中间事件通过线程安全的 sink 实时转发到父级流</span></div>
+            <div class="mini-card"><strong>取消传播</strong><span>父级取消控制器注入到子智能体上下文，支持级联取消</span></div>
+            <div class="mini-card"><strong>共享/独立模型</strong><span>子智能体可选择共享父级模型或配置独立模型</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 9. Governance ========== -->
+<div class="section" id="governance">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-govern),#fb7185)">🛡️</div>
+        治理与安全
+        <span class="num">09</span>
+    </div>
+    <div class="card">
+        <div class="grid-2">
+            <div>
+                <h4>认证授权</h4>
+                <ul>
+                    <li>身份认证服务 — 验证调用者身份</li>
+                    <li>权限校验服务 — 检查操作授权</li>
+                    <li>通过拦截器链自动生效</li>
+                </ul>
+                <h4>配额管理</h4>
+                <ul>
+                    <li>请求频率限制 — 防止滥用</li>
+                    <li>Token 用量配额 — 控制成本</li>
+                    <li>超限快速失败，返回明确错误</li>
+                </ul>
+                <h4>敏感数据保护</h4>
+                <ul>
+                    <li>正则匹配：手机号、邮箱、身份证、银行卡、API Key</li>
+                    <li>输入预处理阶段自动脱敏</li>
+                    <li>可通过 SPI 自定义脱敏策略</li>
+                </ul>
+            </div>
+            <div>
+                <h4>韧性机制</h4>
+                <ul>
+                    <li>熔断器 — 模型调用连续失败时自动熔断</li>
+                    <li>限流器 — 控制并发请求速率</li>
+                    <li>自动重试 — 可配置重试策略</li>
+                    <li>超时控制 — wall-clock 超时兜底</li>
+                </ul>
+                <h4>代码沙箱隔离</h4>
+                <ul>
+                    <li>bwrap namespace 隔离（需 CAP_SYS_ADMIN）</li>
+                    <li>多租户目录隔离：按 tenantId/accountId 分区</li>
+                    <li>Skill 目录只读挂载</li>
+                    <li>产物检测 → 通知上层 → 持久化</li>
+                </ul>
+                <h4>Human-in-the-Loop</h4>
+                <ul>
+                    <li>高风险工具自动触发审批</li>
+                    <li>自定义 HITL 处理器（如控制台交互）</li>
+                    <li>暂停/恢复执行流程</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 10. Storage ========== -->
+<div class="section" id="storage">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-infra),#94a3b8)">🗄️</div>
+        存储层
+        <span class="num">10</span>
+    </div>
+    <div class="card">
+        <h3>存储模块架构</h3>
+        <p>存储模块是不可变数据持有者，统一承载所有持久化组件引用，通过工厂方法切换后端。</p>
+        <div class="grid-2" style="margin-top:16px;">
+            <div>
+                <h4>存储组件</h4>
+                <table>
+                    <thead><tr><th>组件</th><th>职责</th></tr></thead>
+                    <tbody>
+                    <tr><td>工作记忆存储</td><td>三层记忆的持久化后端</td></tr>
+                    <tr><td>快照存储</td><td>执行快照的读写</td></tr>
+                    <tr><td>可观测存储</td><td>运行轨迹的写入/查询</td></tr>
+                    <tr><td>可靠事件存储</td><td>Outbox 事件持久化</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h4>存储后端</h4>
+                <table>
+                    <thead><tr><th>后端</th><th>适用场景</th></tr></thead>
+                    <tbody>
+                    <tr><td>内存</td><td>开发测试（默认）</td></tr>
+                    <tr><td>文件</td><td>单机本地持久化</td></tr>
+                    <tr><td>Redis</td><td>分布式缓存层</td></tr>
+                    <tr><td>数据库 (JDBC)</td><td>生产级持久化</td></tr>
+                    <tr><td>混合策略</td><td>Redis + JDBC 组合</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="callout callout-info" style="margin-top:16px;">
+            <span class="ico">💡</span>
+            <span><strong>设计要点：</strong>StorageModule 构造后不可变，测试时可直接注入 mock 实例。业务方通过 SPI 覆盖 createStorageModule() 切换后端。</span>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 11. Observability ========== -->
+<div class="section" id="observability">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-observe),#fdba74)">📊</div>
+        可观测性
+        <span class="num">11</span>
+    </div>
+    <div class="card">
+        <div class="grid-2">
+            <div>
+                <h4>OpenTelemetry 三大信号</h4>
+                <ul>
+                    <li><strong>Traces</strong> — 每次 run 生成完整 Span 树，支持分布式追踪</li>
+                    <li><strong>Metrics</strong> — Token 用量、延迟分布、工具调用频率等指标</li>
+                    <li><strong>OTLP Export</strong> — 标准协议导出到 Jaeger / Prometheus</li>
+                </ul>
+                <h4>运行轨迹存储</h4>
+                <ul>
+                    <li>Run 级追踪：时长、Token、状态、策略、模型名</li>
+                    <li>Step 级追踪：每迭代的输入/思考/输出/耗时</li>
+                    <li>支持只读查询接口（审计/回放）</li>
+                </ul>
+            </div>
+            <div>
+                <h4>流式事件帧类型</h4>
+                <table>
+                    <thead><tr><th>事件</th><th>说明</th></tr></thead>
+                    <tbody>
+                    <tr><td>RUN_START</td><td>执行开始标记</td></tr>
+                    <tr><td>THINKING_DELTA</td><td>LLM 思考过程增量</td></tr>
+                    <tr><td>CONTENT_DELTA</td><td>内容生成增量</td></tr>
+                    <tr><td>TOOL_CALL</td><td>工具调用请求</td></tr>
+                    <tr><td>TOOL_RESULT</td><td>工具执行结果</td></tr>
+                    <tr><td>MEMORY_RETRIEVED</td><td>记忆检索完成</td></tr>
+                    <tr><td>AGGREGATE_RESULT</td><td>自一致聚合结果</td></tr>
+                    <tr><td>FINAL</td><td>最终结果（状态/Token/置信度）</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 12. Extension ========== -->
+<div class="section" id="extension">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-evolve),#c084fc)">🔌</div>
+        扩展机制
+        <span class="num">12</span>
+    </div>
+    <div class="card">
+        <h3>四大扩展点</h3>
+        <div class="grid-2" style="margin-top:12px;">
+            <div class="mini-card mc-accent" style="--mc:var(--c-api)"><strong>① SPI Configuration（全局替换）</strong><span>最高级别扩展点。通过 Java SPI 替换全局配置中的任何默认实现：模型提供者、存储模块、记忆模块、配额服务、认证服务等。</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-reasoning)"><strong>② 拦截器（参与者，可变换 I/O）</strong><span>覆盖四个 I/O 边界：Run 前后 / LLM 调用前后 / 工具调用前后。支持短路能力（缓存命中/安全拒绝/限流）。</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-observe)"><strong>③ 生命周期钩子（旁观者，只读）</strong><span>观察 Run 生命周期事件：开始/步骤/完成/错误/清理。内置：快照钩子、可观测钩子、记忆钩子。</span></div>
+            <div class="mini-card mc-accent" style="--mc:var(--c-memory)"><strong>④ 上下文提供者（动态注入）</strong><span>每次调用前注入上下文（记忆、知识、动态指令），调用后提取状态存储。与拦截器职责互补。</span></div>
+        </div>
+
+        <h4 style="margin-top:24px;">自进化系统</h4>
+        <p>框架内置智能体自我优化能力：</p>
+        <div class="grid-4" style="margin-top:8px;">
+            <div class="mini-card"><strong>经验收集</strong><span>以钩子形式采集每次执行的经验数据</span></div>
+            <div class="mini-card"><strong>经验分析</strong><span>识别成功/失败模式，提取优化策略</span></div>
+            <div class="mini-card"><strong>策略优化</strong><span>根据性能指标自动调整执行参数</span></div>
+            <div class="mini-card"><strong>技能进化</strong><span>从经验中自动生成新工具定义和速查表</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 13. Data Model ========== -->
+<div class="section" id="data-model">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-infra),#94a3b8)">📐</div>
+        数据模型
+        <span class="num">13</span>
+    </div>
+    <div class="card">
+        <h3>核心数据表</h3>
+        <table>
+            <thead><tr><th>表</th><th>职责</th><th>关键字段</th></tr></thead>
+            <tbody>
+            <tr><td>检查点表</td><td>执行状态检查点</td><td>会话ID · 智能体状态 · 定义哈希 · 版本</td></tr>
+            <tr><td>记忆表</td><td>三层记忆条目</td><td>条目ID · 实例ID · 记忆类型 · 内容 · 向量 · 重要性</td></tr>
+            <tr><td>事件Outbox表</td><td>可靠事件存储</td><td>事件ID · 事件类型 · 载荷 · 重试次数</td></tr>
+            <tr><td>快照表</td><td>执行快照</td><td>快照ID · 会话ID · 触发类型 · 快照数据 · 过期时间</td></tr>
+            <tr><td>运行追踪表</td><td>Run 级追踪</td><td>运行ID · 状态 · 时长 · Token · 策略 · 模型 · 步骤数</td></tr>
+            <tr><td>步骤追踪表</td><td>Step 级追踪</td><td>步骤ID · 运行ID · 阶段 · 类型 · 输入 · 思考 · 输出</td></tr>
+            <tr><td>对话记录表</td><td>对话内容存储</td><td>业务ID · 会话ID · 智能体ID · 类型 · 内容</td></tr>
+            </tbody>
+        </table>
+        <div class="callout callout-info" style="margin-top:16px;">
+            <span class="ico">🔑</span>
+            <span><strong>索引策略：</strong>所有表按业务 ID 建唯一索引；记忆表支持复合索引用于按实例+类型+重要性查询；快照表按过期时间索引支持定期清理。</span>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 14. Tech Stack ========== -->
+<div class="section" id="tech-stack">
+    <div class="section-title">
+        <div class="icon" style="background:linear-gradient(135deg,var(--c-model),#818cf8)">⚡</div>
+        技术栈
+        <span class="num">14</span>
+    </div>
+    <div class="card">
+        <table>
+            <thead><tr><th>层次</th><th>技术</th><th>用途</th></tr></thead>
+            <tbody>
+            <tr><td>响应式编程</td><td>Project Reactor</td><td>Flux/Mono 流式模型，全链路非阻塞</td></tr>
+            <tr><td>HTTP 通信</td><td>OkHttp</td><td>模型调用、远程智能体通信</td></tr>
+            <tr><td>序列化</td><td>Jackson (JSON/YAML)</td><td>数据序列化、智能体定义解析</td></tr>
+            <tr><td>分布式缓存</td><td>Redis (Jedis)</td><td>状态缓存、快照存储</td></tr>
+            <tr><td>可观测性</td><td>OpenTelemetry SDK</td><td>分布式追踪 + 指标 + OTLP 导出</td></tr>
+            <tr><td>脚本引擎</td><td>Nashorn</td><td>JavaScript 沙箱执行</td></tr>
+            <tr><td>日志</td><td>SLF4J + Logback</td><td>结构化日志输出</td></tr>
+            <tr><td>内部 AI 库</td><td>ai-nova-core / agent / graph</td><td>模型协议、图引擎基础库</td></tr>
+            <tr><td>测试框架</td><td>JUnit 5 + Mockito + jqwik</td><td>单元测试 + 属性测试</td></tr>
+            </tbody>
+        </table>
+        <div class="callout callout-warn" style="margin-top:16px;">
+            <span class="ico">⚙️</span>
+            <span><strong>编译要求：</strong>Java 8 源码/目标级别。通过 Optional、CompletableFuture、Stream 等现代 API 保持代码质量。</span>
+        </div>
+    </div>
+</div>
+
+</div><!-- .main -->
+
+<div class="footer">
+    <div class="dots"><span style="color:var(--c-api)">●</span> <span style="color:var(--c-reasoning)">●</span> <span style="color:var(--c-tool)">●</span> <span style="color:var(--c-memory)">●</span> <span style="color:var(--c-evolve)">●</span></div>
+    AgentBuilder 架构设计文档 · 基于源代码分析生成 · 2026-06
+</div>
+
+</body>
+</html>

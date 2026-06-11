@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOS Agent Builder — 整体架构视图</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #0f1419;
+            color: #e8eaed;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 1rem;
+            margin-bottom: 48px;
+        }
+
+        /* ===== 分层架构 ===== */
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin: 48px 0 24px;
+            padding-left: 12px;
+            border-left: 4px solid #60a5fa;
+            color: #e8eaed;
+        }
+
+        .layers {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .layer {
+            border-radius: 12px;
+            padding: 20px 28px;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .layer:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .layer-name {
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .layer-desc {
+            font-size: 0.88rem;
+            opacity: 0.85;
+            line-height: 1.6;
+        }
+        .layer-tag {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.72rem;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.7);
+        }
+
+        .l-api      { background: linear-gradient(135deg, #1e3a5f, #1e4976); }
+        .l-orch     { background: linear-gradient(135deg, #1a3350, #1f3d5e); }
+        .l-reason   { background: linear-gradient(135deg, #2d1b4e, #3b2266); }
+        .l-cap      { background: linear-gradient(135deg, #1b3b2f, #1f4a38); }
+        .l-model    { background: linear-gradient(135deg, #3b2f1b, #4a3a1f); }
+        .l-mem      { background: linear-gradient(135deg, #1b2d3b, #1f3a4a); }
+        .l-gov      { background: linear-gradient(135deg, #3b1b2d, #4a1f3a); }
+        .l-infra    { background: linear-gradient(135deg, #1f2937, #2d3748); }
+
+        /* ===== 模块网格 ===== */
+        .modules-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+        .module-card {
+            background: #1a2332;
+            border: 1px solid #2d3f52;
+            border-radius: 12px;
+            padding: 20px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .module-card:hover {
+            border-color: #60a5fa;
+            box-shadow: 0 0 20px rgba(96,165,250,0.1);
+        }
+        .module-icon {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+        }
+        .module-name {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #f3f4f6;
+        }
+        .module-desc {
+            font-size: 0.82rem;
+            color: #9ca3af;
+            line-height: 1.6;
+        }
+        .module-capabilities {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .cap-tag {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(96,165,250,0.12);
+            color: #93c5fd;
+            border: 1px solid rgba(96,165,250,0.2);
+        }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>BOS Agent Builder</h1>
+    <p class="subtitle">企业级 AI Agent 框架 — 整体架构视图</p>
+
+    <!-- ===== 分层架构 ===== -->
+    <h2 class="section-title">分层架构</h2>
+    <div class="layers">
+        <div class="layer l-api">
+            <div class="layer-name">🎯 公开接口层 (Public API Layer)</div>
+            <div class="layer-desc">面向业务消费者的极简入口。提供 Agent 构建、执行、会话续接、断点恢复等核心能力，屏蔽内部复杂性。支持流式事件回调模式，消费者只需关注业务事件。</div>
+            <span class="layer-tag">面向消费者</span>
+        </div>
+        <div class="layer l-orch">
+            <div class="layer-name">🔀 编排层 (Orchestration Layer)</div>
+            <div class="layer-desc">请求入口与流程编排。负责拦截器链调度（短路/变换）、上下文提供者注入、生命周期钩子分发。将横切关注点与核心推理逻辑解耦。</div>
+            <span class="layer-tag">流程控制</span>
+        </div>
+        <div class="layer l-reason">
+            <div class="layer-name">🧠 推理层 (Reasoning Layer)</div>
+            <div class="layer-desc">ReAct 推理循环引擎。通过可插拔的阶段管线（感知→思考→行动→反思）驱动 LLM 自主推理，支持异步边界、迭代重试、收敛判断、自一致性验证。</div>
+            <span class="layer-tag">核心引擎</span>
+        </div>
+        <div class="layer l-cap">
+            <div class="layer-name">⚡ 能力层 (Capability Layer)</div>
+            <div class="layer-desc">Agent 的外部能力集合。统一工具网关、技能注册与发现、知识检索(RAG)、工作流编排(DAG)、多 Agent 协作、MCP 协议集成。LLM 通过 Function Calling 自主调度。</div>
+            <span class="layer-tag">能力扩展</span>
+        </div>
+        <div class="layer l-model">
+            <div class="layer-name">🤖 模型层 (Model Layer)</div>
+            <div class="layer-desc">大语言模型调用抽象。统一流式/非流式接口，支持模型降级链、自动重试、限流保护、多模型切换。透明装饰器模式实现弹性增强。</div>
+            <span class="layer-tag">LLM 抽象</span>
+        </div>
+        <div class="layer l-mem">
+            <div class="layer-name">💾 记忆与上下文层 (Memory & Context Layer)</div>
+            <div class="layer-desc">上下文窗口与记忆管理。Token 预算分配、自动压缩守卫、记忆整合、工作记忆存储、会话历史维护。确保有限窗口内信息利用最大化。</div>
+            <span class="layer-tag">状态管理</span>
+        </div>
+        <div class="layer l-gov">
+            <div class="layer-name">🛡️ 治理层 (Governance Layer)</div>
+            <div class="layer-desc">企业级安全与合规治理。认证授权、输入/输出护栏、Token 配额管控、熔断器、限流器。保障 Agent 在生产环境安全可控运行。</div>
+            <span class="layer-tag">安全合规</span>
+        </div>
+        <div class="layer l-infra">
+            <div class="layer-name">🏗️ 基础设施层 (Infrastructure Layer)</div>
+            <div class="layer-desc">底层技术支撑。多后端持久化（内存/文件/Redis/JDBC）、事件总线、可观测性（OpenTelemetry 分布式追踪与指标）、快照存储、远程 Agent 通信(A2A)。</div>
+            <span class="layer-tag">技术底座</span>
+        </div>
+    </div>
+
+    <!-- ===== 核心模块 ===== -->
+    <h2 class="section-title">核心模块与组件职责</h2>
+    <div class="modules-grid">
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1e3a5f;">🏗️</div>
+            <div class="module-name">Agent 构建器</div>
+            <div class="module-desc">通过流式 Builder 模式构建 Agent 实例。支持代码构建、YAML/JSON 声明式配置、工厂模式创建。统一配置模型、工具、技能、知识、子Agent、工作流等所有能力。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">流式构建</span>
+                <span class="cap-tag">声明式配置</span>
+                <span class="cap-tag">YAML/JSON</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#2d1b4e;">🧠</div>
+            <div class="module-name">推理引擎</div>
+            <div class="module-desc">基于 ReAct（Reasoning + Acting）模式的推理循环。阶段管线架构：预检查→思考(LLM)→行动(工具)→反思。支持异步边界、迭代控制、收敛判断、自一致性验证。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">ReAct循环</span>
+                <span class="cap-tag">Phase Pipeline</span>
+                <span class="cap-tag">异步边界</span>
+                <span class="cap-tag">收敛控制</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1b3b2f;">🔧</div>
+            <div class="module-name">工具系统</div>
+            <div class="module-desc">统一工具网关，管理工具注册/发现/调用全生命周期。支持内置工具、自定义工具、MCP 协议工具。完整调用链路：参数校验→权限检查→人工审批(HITL)→执行→重试→审计。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">统一网关</span>
+                <span class="cap-tag">MCP协议</span>
+                <span class="cap-tag">HITL审批</span>
+                <span class="cap-tag">权限控制</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#3b2f1b;">🤖</div>
+            <div class="module-name">模型抽象</div>
+            <div class="module-desc">大语言模型统一调用层。流式/非流式统一接口，支持 Thinking Token 输出。装饰器模式实现弹性增强：自动重试、模型降级链、速率限制、拦截器注入。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">流式响应</span>
+                <span class="cap-tag">降级链</span>
+                <span class="cap-tag">自动重试</span>
+                <span class="cap-tag">Thinking</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1b3b2f;">🔗</div>
+            <div class="module-name">多 Agent 协作</div>
+            <div class="module-desc">支持三种协作模式：本地子Agent（独立上下文、支持多轮追问）、工作流编排（确定性DAG流程）、远程Agent（A2A协议跨服务通信）。编排者Agent通过LLM自主决策调度。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">子Agent</span>
+                <span class="cap-tag">工作流DAG</span>
+                <span class="cap-tag">远程A2A</span>
+                <span class="cap-tag">自主调度</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#2d1b4e;">📋</div>
+            <div class="module-name">工作流引擎</div>
+            <div class="module-desc">DAG 图引擎驱动的确定性流程编排。支持顺序、并行、条件分支、循环等模式。节点类型包括 Agent 节点、工具节点、条件节点。工作流作为工具暴露给编排者Agent。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">DAG编排</span>
+                <span class="cap-tag">条件分支</span>
+                <span class="cap-tag">并行执行</span>
+                <span class="cap-tag">循环</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1b2d3b;">💾</div>
+            <div class="module-name">记忆管理</div>
+            <div class="module-desc">多层记忆体系：Token 预算精细分配（System/Tool/History）、自动压缩守卫（阈值触发增量压缩）、工作记忆存储（短期+长期）、记忆整合（跨轮次信息聚合）。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">Token预算</span>
+                <span class="cap-tag">自动压缩</span>
+                <span class="cap-tag">记忆整合</span>
+                <span class="cap-tag">淘汰策略</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1e3a5f;">📚</div>
+            <div class="module-name">知识检索 (RAG)</div>
+            <div class="module-desc">知识库作为工具能力注册，LLM 自主决定何时检索。支持单知识库独立工具和多知识库自动聚合路由。文档分块、向量检索、混合搜索模式。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">自主检索</span>
+                <span class="cap-tag">多知识库</span>
+                <span class="cap-tag">自动路由</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#3b1b2d;">🎯</div>
+            <div class="module-name">技能系统</div>
+            <div class="module-desc">渐进式技能加载模型：发现→激活→执行。技能绑定工具集合，按需加载减少上下文占用。支持技能注册表、能力描述、动态发现。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">渐进加载</span>
+                <span class="cap-tag">按需激活</span>
+                <span class="cap-tag">工具绑定</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1a2332;">🔀</div>
+            <div class="module-name">拦截器链</div>
+            <div class="module-desc">覆盖四个 I/O 边界的中间件体系：主流程层、推理层(LLM调用)、工具层。支持短路能力（缓存命中/安全拦截/限流熔断），按优先级排序执行。参与者角色，可变换输入输出。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">短路能力</span>
+                <span class="cap-tag">I/O变换</span>
+                <span class="cap-tag">优先级排序</span>
+                <span class="cap-tag">四层覆盖</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#2d3748;">👁️</div>
+            <div class="module-name">生命周期钩子</div>
+            <div class="module-desc">推理运行的观察者机制。在关键生命周期节点回调：启动、每步、完成、错误、结束。只读观察不修改流程，用于日志、追踪、快照、审计等横切关注点。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">观察者模式</span>
+                <span class="cap-tag">生命周期</span>
+                <span class="cap-tag">不侵入</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#3b1b2d;">🛡️</div>
+            <div class="module-name">治理与安全</div>
+            <div class="module-desc">企业级治理能力集合：认证授权（Agent/工具级权限）、输入输出护栏（安全过滤）、Token 配额管控、熔断器（失败计数+半开探测）、限流器（滑动窗口+令牌桶）。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">认证授权</span>
+                <span class="cap-tag">护栏规则</span>
+                <span class="cap-tag">配额管控</span>
+                <span class="cap-tag">熔断限流</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1e3a5f;">📊</div>
+            <div class="module-name">可观测性</div>
+            <div class="module-desc">基于 OpenTelemetry 的全链路可观测。分布式追踪（Span/Trace）、指标采集（Token用量/延迟/成功率）、结构化日志。覆盖 Run/Step/Tool/LLM 四个粒度。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">OpenTelemetry</span>
+                <span class="cap-tag">分布式追踪</span>
+                <span class="cap-tag">指标采集</span>
+                <span class="cap-tag">OTLP导出</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#2d3748;">💿</div>
+            <div class="module-name">持久化存储</div>
+            <div class="module-desc">多后端统一存储抽象。支持内存（开发测试）、文件（单机）、Redis（分布式快照/事件）、JDBC（生产审计）。版本化接口支持缓存快速失效。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">多后端</span>
+                <span class="cap-tag">Redis</span>
+                <span class="cap-tag">JDBC</span>
+                <span class="cap-tag">版本化</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1b3b2f;">📸</div>
+            <div class="module-name">快照与恢复</div>
+            <div class="module-desc">执行状态的捕获与恢复。两种模式：会话续接（跨请求多轮对话，通过 sessionId 恢复历史）、断点恢复（故障恢复，从快照继续中断的推理）。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">会话续接</span>
+                <span class="cap-tag">断点恢复</span>
+                <span class="cap-tag">状态捕获</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#3b2f1b;">📡</div>
+            <div class="module-name">事件总线</div>
+            <div class="module-desc">发布/订阅模式的事件系统。支持执行事件的异步分发、可靠投递保证。解耦组件间通信，支持外部系统集成通知。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">发布订阅</span>
+                <span class="cap-tag">可靠投递</span>
+                <span class="cap-tag">异步分发</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#2d1b4e;">🌐</div>
+            <div class="module-name">远程托管 (A2A)</div>
+            <div class="module-desc">Agent 间跨服务通信协议。支持远程 Agent 端点注册、HTTP 通信、自定义客户端（认证/重试/连接池）。实现分布式多 Agent 系统的互联互通。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">A2A协议</span>
+                <span class="cap-tag">HTTP通信</span>
+                <span class="cap-tag">自定义Client</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#1b2d3b;">🧬</div>
+            <div class="module-name">自我进化</div>
+            <div class="module-desc">Agent 自我改进能力。经验分析与提取、Cheatsheet 管理（最佳实践积累）、技能演化（从执行经验中学习新技能）。持续提升 Agent 推理质量。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">经验提取</span>
+                <span class="cap-tag">Cheatsheet</span>
+                <span class="cap-tag">技能演化</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#3b1b2d;">✍️</div>
+            <div class="module-name">提示词工程</div>
+            <div class="module-desc">模板化提示词管理。支持变量占位符渲染、资源文件加载、动态变量提供者注入。分离提示词定义与运行时变量，支持多环境配置。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">模板渲染</span>
+                <span class="cap-tag">变量注入</span>
+                <span class="cap-tag">资源加载</span>
+            </div>
+        </div>
+
+        <div class="module-card">
+            <div class="module-icon" style="background:#2d3748;">⚙️</div>
+            <div class="module-name">配置与扩展</div>
+            <div class="module-desc">SPI 机制驱动的扩展点体系。支持自定义模型提供者、存储后端、知识检索器、脚本引擎等。插件化架构，框架核心与扩展实现解耦。</div>
+            <div class="module-capabilities">
+                <span class="cap-tag">SPI扩展</span>
+                <span class="cap-tag">插件化</span>
+                <span class="cap-tag">多引擎</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===== 数据流图 ===== -->
+    <h2 class="section-title">核心数据流</h2>
+    <div style="background:#1a2332; border:1px solid #2d3f52; border-radius:12px; padding:32px; margin-top:24px; overflow-x:auto;">
+        <svg viewBox="0 0 1100 620" xmlns="http://www.w3.org/2000/svg" style="width:100%; max-width:1100px; margin:0 auto; display:block;">
+            <!-- 背景 -->
+            <defs>
+                <linearGradient id="gApi" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.9"/>
+                    <stop offset="100%" style="stop-color:#2563eb;stop-opacity:0.9"/>
+                </linearGradient>
+                <linearGradient id="gOrch" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#6366f1;stop-opacity:0.85"/>
+                    <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:0.85"/>
+                </linearGradient>
+                <linearGradient id="gReason" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:0.85"/>
+                    <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0.85"/>
+                </linearGradient>
+                <linearGradient id="gCap" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#10b981;stop-opacity:0.85"/>
+                    <stop offset="100%" style="stop-color:#059669;stop-opacity:0.85"/>
+                </linearGradient>
+                <linearGradient id="gModel" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:0.85"/>
+                    <stop offset="100%" style="stop-color:#d97706;stop-opacity:0.85"/>
+                </linearGradient>
+                <linearGradient id="gInfra" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#6b7280;stop-opacity:0.7"/>
+                    <stop offset="100%" style="stop-color:#4b5563;stop-opacity:0.7"/>
+                </linearGradient>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#60a5fa"/>
+                </marker>
+                <marker id="arrowGreen" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+                </marker>
+                <marker id="arrowYellow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24"/>
+                </marker>
+            </defs>
+
+            <!-- 用户 -->
+            <rect x="460" y="10" width="180" height="44" rx="22" fill="url(#gApi)"/>
+            <text x="550" y="37" text-anchor="middle" fill="white" font-size="14" font-weight="600">用户请求</text>
+
+            <!-- 编排层 -->
+            <rect x="350" y="80" width="400" height="50" rx="10" fill="url(#gOrch)"/>
+            <text x="550" y="110" text-anchor="middle" fill="white" font-size="13" font-weight="500">编排层：拦截器链 → 上下文注入 → 钩子分发</text>
+
+            <!-- 推理层 -->
+            <rect x="300" y="160" width="500" height="180" rx="12" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-dasharray="6,3"/>
+            <text x="550" y="182" text-anchor="middle" fill="#c4b5fd" font-size="12" font-weight="600">推理层 — ReAct 循环</text>
+
+            <!-- Phase boxes -->
+            <rect x="320" y="200" width="100" height="50" rx="8" fill="url(#gReason)"/>
+            <text x="370" y="230" text-anchor="middle" fill="white" font-size="11" font-weight="500">预检查</text>
+
+            <rect x="440" y="200" width="100" height="50" rx="8" fill="url(#gReason)"/>
+            <text x="490" y="230" text-anchor="middle" fill="white" font-size="11" font-weight="500">思考(LLM)</text>
+
+            <rect x="560" y="200" width="100" height="50" rx="8" fill="url(#gReason)"/>
+            <text x="610" y="230" text-anchor="middle" fill="white" font-size="11" font-weight="500">行动(工具)</text>
+
+            <rect x="680" y="200" width="100" height="50" rx="8" fill="url(#gReason)"/>
+            <text x="730" y="230" text-anchor="middle" fill="white" font-size="11" font-weight="500">反思</text>
+
+            <!-- Loop arrow -->
+            <path d="M 730 255 C 730 300, 370 300, 370 255" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-dasharray="4,3"/>
+            <text x="550" y="295" text-anchor="middle" fill="#a78bfa" font-size="10">迭代循环（直到收敛）</text>
+
+            <!-- Arrows between phases -->
+            <line x1="420" y1="225" x2="438" y2="225" stroke="#c4b5fd" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+            <line x1="540" y1="225" x2="558" y2="225" stroke="#c4b5fd" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+            <line x1="660" y1="225" x2="678" y2="225" stroke="#c4b5fd" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+            <!-- 能力层 -->
+            <rect x="200" y="370" width="700" height="50" rx="10" fill="url(#gCap)"/>
+            <text x="550" y="400" text-anchor="middle" fill="white" font-size="13" font-weight="500">能力层：工具网关 · 子Agent · 工作流 · 知识检索 · MCP · 技能</text>
+
+            <!-- 模型层 -->
+            <rect x="350" y="450" width="400" height="44" rx="10" fill="url(#gModel)"/>
+            <text x="550" y="477" text-anchor="middle" fill="white" font-size="13" font-weight="500">模型层：LLM 调用 · 降级链 · 重试 · 限流</text>
+
+            <!-- 基础设施 -->
+            <rect x="200" y="530" width="700" height="50" rx="10" fill="url(#gInfra)"/>
+            <text x="550" y="560" text-anchor="middle" fill="white" font-size="12" font-weight="500">基础设施：存储(Redis/JDBC) · 事件总线 · 可观测性(OTel) · 快照 · A2A通信</text>
+
+            <!-- 治理（侧边） -->
+            <rect x="940" y="80" width="140" height="440" rx="10" fill="none" stroke="#f472b6" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <text x="1010" y="200" text-anchor="middle" fill="#f9a8d4" font-size="11" font-weight="500" transform="rotate(90, 1010, 280)">治理层：认证 · 护栏 · 配额 · 熔断 · 限流</text>
+
+            <!-- 记忆（侧边） -->
+            <rect x="20" y="80" width="140" height="440" rx="10" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <text x="90" y="200" text-anchor="middle" fill="#7dd3fc" font-size="11" font-weight="500" transform="rotate(-90, 90, 280)">记忆层：Token预算 · 自动压缩 · 工作记忆 · 会话管理</text>
+
+            <!-- 连接线 -->
+            <line x1="550" y1="54" x2="550" y2="78" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrowhead)"/>
+            <line x1="550" y1="130" x2="550" y2="158" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrowhead)"/>
+            <line x1="610" y1="250" x2="610" y2="368" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
+            <line x1="490" y1="250" x2="490" y2="448" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowYellow)"/>
+            <line x1="550" y1="420" x2="550" y2="448" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowYellow)"/>
+            <line x1="550" y1="494" x2="550" y2="528" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+
+            <!-- 标注 -->
+            <text x="625" y="315" fill="#34d399" font-size="9">工具调用</text>
+            <text x="440" y="360" fill="#fbbf24" font-size="9">LLM推理</text>
+        </svg>
+    </div>
+
+    <!-- ===== 设计原则 ===== -->
+    <h2 class="section-title">架构设计原则</h2>
+    <div class="modules-grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
+
+        <div class="module-card" style="border-left: 3px solid #60a5fa;">
+            <div class="module-name">全链路响应式流</div>
+            <div class="module-desc">从用户输入到最终输出，全程基于 Reactive Streams（Flux）。支持逐 Token 推送、中间步骤实时可观测、背压控制。消费者通过事件回调获取结果，无需阻塞等待。</div>
+        </div>
+
+        <div class="module-card" style="border-left: 3px solid #a78bfa;">
+            <div class="module-name">可插拔阶段管线</div>
+            <div class="module-desc">推理循环拆分为无状态的 Phase 策略对象，通过编排器驱动。支持异步边界（LLM流式/工具异步）、迭代重试、收敛终止。新增推理阶段只需实现 Phase 接口。</div>
+        </div>
+
+        <div class="module-card" style="border-left: 3px solid #34d399;">
+            <div class="module-name">参与者/观察者分离</div>
+            <div class="module-desc">横切关注点分为两类：拦截器（参与者，可变换 I/O、可短路）和钩子（观察者，只读观察不修改流程）。职责清晰，避免观测逻辑意外影响推理结果。</div>
+        </div>
+
+        <div class="module-card" style="border-left: 3px solid #fbbf24;">
+            <div class="module-name">LLM 自主决策</div>
+            <div class="module-desc">工具调用、子Agent调度、工作流触发、知识检索均由 LLM 通过 Function Calling 自主决定。框架不硬编码调用逻辑，最大化 LLM 的推理自由度。</div>
+        </div>
+
+        <div class="module-card" style="border-left: 3px solid #f472b6;">
+            <div class="module-name">治理内建</div>
+            <div class="module-desc">安全、合规、弹性作为框架一等公民。认证授权、护栏规则、配额管控、熔断限流不是事后补丁，而是架构级设计，确保生产环境安全可控。</div>
+        </div>
+
+        <div class="module-card" style="border-left: 3px solid #38bdf8;">
+            <div class="module-name">多后端可替换</div>
+            <div class="module-desc">存储、模型、知识检索等基础设施通过接口抽象，支持多后端无缝切换。开发用内存、测试用文件、生产用 Redis/JDBC，无需修改业务代码。</div>
+        </div>
+
+    </div>
+
+    <!-- ===== 技术栈 ===== -->
+    <h2 class="section-title">技术栈</h2>
+    <div style="background:#1a2332; border:1px solid #2d3f52; border-radius:12px; padding:24px 32px; margin-top:24px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:16px;">
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">核心语言</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">Java 8</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">响应式框架</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">Project Reactor 3.3</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">序列化</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">Jackson (JSON/YAML)</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">可观测性</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">OpenTelemetry 1.29</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">分布式存储</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">Redis (Jedis 4.4)</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">HTTP 通信</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">OkHttp 4.10</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">脚本引擎</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">Nashorn (JS 沙箱)</div>
+            </div>
+            <div>
+                <div style="color:#9ca3af; font-size:0.75rem; margin-bottom:6px;">内部 SDK</div>
+                <div style="color:#f3f4f6; font-size:0.9rem;">ai-nova-core / agent / graph</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top:60px; text-align:center; color:#6b7280; font-size:0.8rem;">
+        BOS Agent Builder Architecture Overview · Generated 2026-05-29
+    </div>
+</div>
+</body>
+</html>
