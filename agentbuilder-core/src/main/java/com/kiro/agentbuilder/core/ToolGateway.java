@@ -66,6 +66,12 @@ public class ToolGateway {
                     return policyEngine.validate(tool, call, context)
                             .flatMap(policyResult -> {
                                 if (!policyResult.allowed()) {
+                                    if (policyResult.paused()) {
+                                        return Mono.error(new HitlPauseException(
+                                                policyResult.reason(),
+                                                policyResult.approvalRequestId(),
+                                                call));
+                                    }
                                     return Mono.just(ToolResult.error(call.callId(), policyResult.reason()));
                                 }
                                 schemaValidator.validate(tool.getParameterSchema(), call.arguments());

@@ -6,6 +6,7 @@ public enum AgentEventType {
     CONTENT_DELTA,
     TOOL_CALL,
     TOOL_RESULT,
+    APPROVAL_REQUIRED,
     MEMORY_RETRIEVED,
     AGGREGATE_RESULT,
     FINAL,

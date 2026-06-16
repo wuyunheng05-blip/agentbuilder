@@ -40,7 +40,7 @@ public class SnapshotHook implements LifecycleHook {
 
     @Override
     public void onError(ExecutionContext context, Throwable error) {
-        saveSnapshot(context, "ERROR");
+        saveSnapshot(context, error instanceof HitlPauseException ? "APPROVAL_REQUIRED" : "ERROR");
     }
 
     @Override

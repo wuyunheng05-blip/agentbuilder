@@ -16,7 +16,15 @@ import java.util.UUID;
 
 public class ExecutionContextFactory {
 
-    private final ExecutionSnapshotMapper snapshotMapper = new ExecutionSnapshotMapper();
+    private final ExecutionSnapshotMapper snapshotMapper;
+
+    public ExecutionContextFactory() {
+        this(new ExecutionSnapshotMapper());
+    }
+
+    public ExecutionContextFactory(ExecutionSnapshotMapper snapshotMapper) {
+        this.snapshotMapper = snapshotMapper;
+    }
 
     public ExecutionContext create(AgentConfig config, AgentInput input) {
         return create(config, input, null);
@@ -45,6 +53,11 @@ public class ExecutionContextFactory {
             attributes.put(SnapshotAttributes.RESUMED_FROM_SNAPSHOT_ID, snapshot.snapshotId());
             attributes.put(RuntimeAttributes.CURRENT_ITERATION, snapshotMapper.restoreCurrentIteration(snapshot));
             attributes.put(RuntimeAttributes.ITERATION_ATTEMPTS, snapshotMapper.restoreIterationAttempts(snapshot));
+            attributes.put(RuntimeAttributes.CURRENT_PHASE_INDEX, snapshotMapper.restoreCurrentPhaseIndex(snapshot));
+            attributes.put(RuntimeAttributes.CURRENT_DECISION, snapshotMapper.restoreDecision(snapshot));
+            if (snapshotMapper.restorePendingApprovalRequestId(snapshot) != null) {
+                attributes.put(RuntimeAttributes.PENDING_APPROVAL_REQUEST_ID, snapshotMapper.restorePendingApprovalRequestId(snapshot));
+            }
         }
         return new ExecutionContext(
                 snapshot == null ? UUID.randomUUID().toString() : snapshotMapper.restoreRunId(snapshot),

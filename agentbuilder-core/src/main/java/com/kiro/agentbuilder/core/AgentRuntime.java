@@ -5,11 +5,11 @@ import com.kiro.agentbuilder.api.model.AgentConfig;
 import com.kiro.agentbuilder.api.model.AgentInput;
 import com.kiro.agentbuilder.api.model.ExecutionContext;
 import com.kiro.agentbuilder.api.model.event.AgentEvent;
+import com.kiro.agentbuilder.api.model.event.ApprovalRequiredPayload;
 import com.kiro.agentbuilder.api.model.event.AgentEventType;
 import com.kiro.agentbuilder.api.model.event.ErrorPayload;
 import com.kiro.agentbuilder.api.model.event.FinalPayload;
 import com.kiro.agentbuilder.api.react.Phase;
-import com.kiro.agentbuilder.api.storage.AgentSnapshot;
 import com.kiro.agentbuilder.memory.ContextWindowManager;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
@@ -23,7 +23,8 @@ public class AgentRuntime implements Agent {
 
     private final AgentConfig config;
     private final AgentStateMachine stateMachine = new AgentStateMachine();
-    private final ExecutionContextFactory contextFactory = new ExecutionContextFactory();
+    private final ExecutionSnapshotMapper snapshotMapper;
+    private final ExecutionContextFactory contextFactory;
     private final InterceptorChain interceptorChain;
     private final LifecycleHookChain hookChain;
     private final InputPreprocessor inputPreprocessor;
@@ -36,6 +37,8 @@ public class AgentRuntime implements Agent {
 
     public AgentRuntime(AgentConfig config) {
         this.config = config;
+        this.snapshotMapper = new ExecutionSnapshotMapper();
+        this.contextFactory = new ExecutionContextFactory(snapshotMapper);
         this.interceptorChain = new InterceptorChain(config.interceptors());
         this.hookChain = new LifecycleHookChain(config.hooks());
         this.inputPreprocessor = new InputPreprocessor(
@@ -48,7 +51,7 @@ public class AgentRuntime implements Agent {
                 toolRegistry,
                 interceptorChain,
                 config.authorizationService(),
-                new PolicyEngine(new AutoApproveHitlHandler()),
+                new PolicyEngine(new PausingHitlHandler()),
                 new JsonSchemaValidator());
         this.promptComposer = new PromptComposer(config, new ContextWindowManager(10));
         this.orchestrator = new ReActOrchestrator(buildPhases());
@@ -69,13 +72,13 @@ public class AgentRuntime implements Agent {
                 return;
             }
             ExecutionContext context = contextFactory.create(config, effectiveInput);
-            currentContext = context;
-            startRun(context, effectiveInput, sink)
-                    .doFinally(signalType -> cleanup(context))
-                    .subscribe(
-                            ignored -> {
-                            },
-                            error -> handleFailure(context, sink, error));
+                    currentContext = context;
+                    startRun(context, effectiveInput, sink)
+                            .doFinally(signalType -> cleanup(context))
+                            .subscribe(
+                                    ignored -> {
+                                    },
+                                    error -> handleTerminalError(context, sink, error));
         });
     }
 
@@ -96,7 +99,7 @@ public class AgentRuntime implements Agent {
                             .subscribe(
                                     ignored -> {
                                     },
-                                    error -> handleFailure(context, sink, error));
+                                    error -> handleTerminalError(context, sink, error));
                 }));
     }
 
@@ -136,8 +139,30 @@ public class AgentRuntime implements Agent {
         return AgentEvent.of(AgentEventType.ERROR, currentContext == null ? getId() : currentContext.runId(), new ErrorPayload(code, message));
     }
 
+    private void handleTerminalError(ExecutionContext context, FluxSink<AgentEvent> sink, Throwable error) {
+        hookChain.onError(context, error);
+        if (error instanceof HitlPauseException pauseException) {
+            String snapshotId = String.valueOf(context.attributes().getOrDefault(SnapshotAttributes.LATEST_SNAPSHOT_ID, ""));
+            sink.next(AgentEvent.of(
+                    AgentEventType.APPROVAL_REQUIRED,
+                    context.runId(),
+                    new ApprovalRequiredPayload(
+                            pauseException.approvalRequestId(),
+                            snapshotId,
+                            pauseException.toolCall(),
+                            error.getMessage())));
+            sink.complete();
+            return;
+        }
+        emitFailure(context, sink, error);
+    }
+
     private void handleFailure(ExecutionContext context, FluxSink<AgentEvent> sink, Throwable error) {
         hookChain.onError(context, error);
+        emitFailure(context, sink, error);
+    }
+
+    private void emitFailure(ExecutionContext context, FluxSink<AgentEvent> sink, Throwable error) {
         sink.next(AgentEvent.of(
                 AgentEventType.ERROR,
                 context.runId(),

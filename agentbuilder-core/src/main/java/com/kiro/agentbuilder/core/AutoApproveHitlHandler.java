@@ -9,6 +9,6 @@ public class AutoApproveHitlHandler implements HitlHandler {
 
     @Override
     public Mono<ApprovalDecision> requestApproval(Tool tool, ToolCall call, ExecutionContext context) {
-        return Mono.just(ApprovalDecision.approved("auto approved by default handler"));
+        return Mono.just(ApprovalDecision.approved("auto approved by default handler", null));
     }
 }

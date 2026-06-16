@@ -29,9 +29,15 @@ public class PolicyEngine {
 
         if (tool.getRiskLevel() == RiskLevel.HIGH || tool.getRiskLevel() == RiskLevel.CRITICAL) {
             return hitlHandler.requestApproval(tool, call, context)
-                    .map(decision -> decision.approved()
-                            ? PolicyResult.allow(timeout)
-                            : PolicyResult.reject("HITL rejected tool call: " + decision.reason()));
+                    .map(decision -> {
+                        if (decision.approved()) {
+                            return PolicyResult.allow(timeout);
+                        }
+                        if (decision.pending()) {
+                            return PolicyResult.pause(decision.reason(), decision.approvalRequestId());
+                        }
+                        return PolicyResult.reject("HITL rejected tool call: " + decision.reason());
+                    });
         }
 
         return Mono.just(PolicyResult.allow(timeout));

@@ -24,8 +24,8 @@ public class ConsoleHitlHandler implements HitlHandler {
                     String answer = scanner.nextLine();
                     boolean approved = answer != null && answer.trim().toLowerCase(Locale.ROOT).startsWith("y");
                     return approved
-                            ? ApprovalDecision.approved("approved via console")
-                            : ApprovalDecision.rejected("rejected via console");
+                            ? ApprovalDecision.approved("approved via console", null)
+                            : ApprovalDecision.rejected("rejected via console", null);
                 })
                 .subscribeOn(Schedulers.boundedElastic());
     }

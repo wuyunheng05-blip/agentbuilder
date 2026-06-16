@@ -86,7 +86,7 @@ class RuntimeEnhancementsTest {
                 new PolicyEngine(new HitlHandler() {
                     @Override
                     public Mono<ApprovalDecision> requestApproval(Tool tool, ToolCall call, ExecutionContext context) {
-                        return Mono.just(ApprovalDecision.rejected("manual rejection"));
+                        return Mono.just(ApprovalDecision.rejected("manual rejection", "approval-1"));
                     }
                 }),
                 new JsonSchemaValidator());

@@ -22,22 +22,29 @@ public class ReActOrchestrator {
 
     public Mono<FinalPayload> orchestrate(ExecutionContext context, FluxSink<AgentEvent> sink) {
         int initialIteration = ((Number) context.attributes().getOrDefault(RuntimeAttributes.CURRENT_ITERATION, 0)).intValue();
-        return runIteration(context, sink, initialIteration)
+        int initialPhaseIndex = ((Number) context.attributes().getOrDefault(RuntimeAttributes.CURRENT_PHASE_INDEX, 0)).intValue();
+        return runIteration(context, sink, initialIteration, initialPhaseIndex)
                 .then(Mono.defer(() -> Mono.justOrEmpty((FinalPayload) context.attributes().get(RuntimeAttributes.TERMINAL_PAYLOAD))))
                 .switchIfEmpty(Mono.error(new IllegalStateException("Orchestration completed without terminal payload")));
     }
 
     private Mono<Void> runIteration(ExecutionContext context, FluxSink<AgentEvent> sink, int iteration) {
+        return runIteration(context, sink, iteration, 0);
+    }
+
+    private Mono<Void> runIteration(ExecutionContext context, FluxSink<AgentEvent> sink, int iteration, int phaseIndex) {
         context.attributes().put(RuntimeAttributes.CURRENT_ITERATION, iteration);
         int attempts = ((Number) context.attributes().getOrDefault(RuntimeAttributes.ITERATION_ATTEMPTS, 0)).intValue() + 1;
         context.attributes().put(RuntimeAttributes.ITERATION_ATTEMPTS, attempts);
-        return runPhase(context, sink, iteration, 0);
+        return runPhase(context, sink, iteration, phaseIndex);
     }
 
     private Mono<Void> runPhase(ExecutionContext context, FluxSink<AgentEvent> sink, int iteration, int phaseIndex) {
         if (phaseIndex >= phases.size()) {
+            context.attributes().put(RuntimeAttributes.CURRENT_PHASE_INDEX, 0);
             return runIteration(context, sink, iteration + 1);
         }
+        context.attributes().put(RuntimeAttributes.CURRENT_PHASE_INDEX, phaseIndex);
         Phase phase = phases.get(phaseIndex);
         return phase.execute(context, sink)
                 .flatMap(result -> handlePhaseResult(context, sink, iteration, phaseIndex, result));
