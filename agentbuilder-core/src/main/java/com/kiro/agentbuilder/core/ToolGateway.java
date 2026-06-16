@@ -15,15 +15,21 @@ public class ToolGateway {
     private final ToolRegistry toolRegistry;
     private final InterceptorChain interceptorChain;
     private final com.kiro.agentbuilder.api.spi.AuthorizationService authorizationService;
+    private final PolicyEngine policyEngine;
+    private final JsonSchemaValidator schemaValidator;
     private final Map<String, ToolResult> idempotentCache = new ConcurrentHashMap<>();
 
     public ToolGateway(
             ToolRegistry toolRegistry,
             InterceptorChain interceptorChain,
-            com.kiro.agentbuilder.api.spi.AuthorizationService authorizationService) {
+            com.kiro.agentbuilder.api.spi.AuthorizationService authorizationService,
+            PolicyEngine policyEngine,
+            JsonSchemaValidator schemaValidator) {
         this.toolRegistry = toolRegistry;
         this.interceptorChain = interceptorChain;
         this.authorizationService = authorizationService;
+        this.policyEngine = policyEngine;
+        this.schemaValidator = schemaValidator;
     }
 
     public Mono<ToolResult> execute(ToolCall call, ExecutionContext context) {
@@ -45,8 +51,16 @@ public class ToolGateway {
                     if (tool.isIdempotent() && idempotentCache.containsKey(cacheKey)) {
                         return Mono.just(idempotentCache.get(cacheKey));
                     }
-                    return tool.execute(call, context)
-                            .flatMap(result -> interceptorChain.afterToolCall(context, result))
+                    return policyEngine.validate(tool, call, context)
+                            .flatMap(policyResult -> {
+                                if (!policyResult.allowed()) {
+                                    return Mono.just(ToolResult.error(call.callId(), policyResult.reason()));
+                                }
+                                schemaValidator.validate(tool.getParameterSchema(), call.arguments());
+                                return tool.execute(call, context)
+                                        .timeout(policyResult.timeout())
+                                        .flatMap(result -> interceptorChain.afterToolCall(context, result));
+                            })
                             .doOnNext(result -> {
                                 if (tool.isIdempotent() && !result.error()) {
                                     idempotentCache.put(cacheKey, result);

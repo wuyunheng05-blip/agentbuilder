@@ -13,5 +13,7 @@ public interface ObservabilityStore {
 
     Mono<RunTrace> getRunTrace(String runId);
 
+    Flux<RunTrace> queryRunTraces(String sessionId);
+
     Flux<StepTrace> getStepTraces(String runId);
 }

@@ -40,6 +40,12 @@ public class InMemoryObservabilityStore implements ObservabilityStore {
     }
 
     @Override
+    public Flux<RunTrace> queryRunTraces(String sessionId) {
+        return Flux.fromStream(runs.values().stream()
+                .filter(trace -> sessionId == null || sessionId.equals(trace.sessionId())));
+    }
+
+    @Override
     public Flux<StepTrace> getStepTraces(String runId) {
         return Flux.fromIterable(steps.getOrDefault(runId, List.of()));
     }

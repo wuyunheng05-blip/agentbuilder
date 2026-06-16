@@ -44,7 +44,12 @@ public class AgentRuntime implements Agent {
                 config.contextProviders());
         this.guardChain = new GuardChain(config.guards());
         this.toolRegistry = new ToolRegistry(config.tools());
-        this.toolGateway = new ToolGateway(toolRegistry, interceptorChain, config.authorizationService());
+        this.toolGateway = new ToolGateway(
+                toolRegistry,
+                interceptorChain,
+                config.authorizationService(),
+                new PolicyEngine(new AutoApproveHitlHandler()),
+                new JsonSchemaValidator());
         this.promptComposer = new PromptComposer(config, new ContextWindowManager(10));
         this.orchestrator = new ReActOrchestrator(buildPhases());
     }

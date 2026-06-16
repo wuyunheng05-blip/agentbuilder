@@ -161,11 +161,19 @@ public class DefaultAgentBuilder implements AgentBuilder {
                 ? configuration.createAuthenticationService() : authenticationService;
         AuthorizationService resolvedAuthorization = authorizationService == null
                 ? configuration.createAuthorizationService() : authorizationService;
+        ModelProvider resolvedModelProvider = modelProvider == null ? configuration.createModelProvider() : modelProvider;
 
         List<ExecutionGuard> resolvedGuards = new ArrayList<>(guards);
         resolvedGuards.add(new RecursionDepthGuard(maxRecursionDepth));
         resolvedGuards.add(new QuotaGuard(resolvedQuota));
         resolvedGuards.add(new CancellationGuard());
+
+        List<LifecycleHook> resolvedHooks = new ArrayList<>(hooks);
+        resolvedHooks.add(new TraceRecordingHook(
+                resolvedStorage.observabilityStore(),
+                agentId,
+                resolvedModelProvider.getModelName(),
+                "REACT"));
 
         Map<String, Object> attributes = new HashMap<>();
         attributes.put("agentId", agentId);
@@ -175,10 +183,10 @@ public class DefaultAgentBuilder implements AgentBuilder {
                 systemPrompt,
                 tools,
                 interceptors,
-                hooks,
+                resolvedHooks,
                 contextProviders,
                 resolvedGuards,
-                modelProvider == null ? configuration.createModelProvider() : modelProvider,
+                resolvedModelProvider,
                 resolvedMemory,
                 resolvedStorage,
                 resolvedMasker,
