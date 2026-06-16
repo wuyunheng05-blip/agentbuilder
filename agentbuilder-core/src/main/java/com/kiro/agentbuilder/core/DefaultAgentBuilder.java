@@ -176,6 +176,10 @@ public class DefaultAgentBuilder implements AgentBuilder {
         resolvedGuards.add(new CancellationGuard());
 
         List<LifecycleHook> resolvedHooks = new ArrayList<>(hooks);
+        resolvedHooks.add(new SnapshotHook(
+                resolvedStorage.snapshotStore(),
+                new ExecutionSnapshotMapper(),
+                1));
         resolvedHooks.add(new TraceRecordingHook(
                 resolvedStorage.observabilityStore(),
                 agentId,

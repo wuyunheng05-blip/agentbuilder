@@ -16,34 +16,45 @@ import java.util.UUID;
 
 public class ExecutionContextFactory {
 
+    private final ExecutionSnapshotMapper snapshotMapper = new ExecutionSnapshotMapper();
+
     public ExecutionContext create(AgentConfig config, AgentInput input) {
         return create(config, input, null);
     }
 
-    @SuppressWarnings("unchecked")
     public ExecutionContext create(AgentConfig config, AgentInput input, AgentSnapshot snapshot) {
         List<Message> history = new ArrayList<>();
         if (config.systemPrompt() != null && !config.systemPrompt().isBlank()) {
             history.add(Message.system(config.systemPrompt()));
         }
-        if (snapshot != null && snapshot.snapshotData().get("messages") instanceof List<?> messages) {
-            messages.stream()
-                    .filter(Message.class::isInstance)
-                    .map(Message.class::cast)
-                    .forEach(history::add);
+        if (snapshot != null) {
+            history.addAll(snapshotMapper.restoreMessages(snapshot));
         }
         if (input != null && input.content() != null && !input.content().isBlank()) {
             history.add(Message.user(input.content()));
         }
+        long totalBudget = snapshot == null ? config.maxTokens() : snapshotMapper.restoreTotalBudget(snapshot, config.maxTokens());
+        TokenBudget tokenBudget = new TokenBudget(totalBudget);
+        if (snapshot != null) {
+            tokenBudget.consume(snapshotMapper.restoreConsumedBudget(snapshot));
+        }
+        Map<String, Object> attributes = new java.util.HashMap<>(config.attributes());
+        if (snapshot != null) {
+            attributes.put("snapshot", snapshot);
+            attributes.put("config", config);
+            attributes.put(SnapshotAttributes.RESUMED_FROM_SNAPSHOT_ID, snapshot.snapshotId());
+            attributes.put(RuntimeAttributes.CURRENT_ITERATION, snapshotMapper.restoreCurrentIteration(snapshot));
+            attributes.put(RuntimeAttributes.ITERATION_ATTEMPTS, snapshotMapper.restoreIterationAttempts(snapshot));
+        }
         return new ExecutionContext(
-                UUID.randomUUID().toString(),
+                snapshot == null ? UUID.randomUUID().toString() : snapshotMapper.restoreRunId(snapshot),
                 config.agentId(),
                 input != null && input.sessionId() != null ? input.sessionId() : config.sessionId(),
                 history,
-                new TokenBudget(config.maxTokens()),
-                0,
+                tokenBudget,
+                snapshot == null ? 0 : snapshotMapper.restoreRecursionDepth(snapshot),
                 new CancellationToken(),
-                snapshot == null ? config.attributes() : Map.of("snapshot", snapshot, "config", config),
+                attributes,
                 Instant.now(),
                 config.runTimeout());
     }

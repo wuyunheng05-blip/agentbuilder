@@ -21,4 +21,11 @@ public class InMemorySnapshotStore implements SnapshotStore {
     public Mono<AgentSnapshot> load(String snapshotId) {
         return Mono.justOrEmpty(snapshots.get(snapshotId));
     }
+
+    @Override
+    public Mono<AgentSnapshot> findLatest(String sessionId) {
+        return Mono.justOrEmpty(snapshots.values().stream()
+                .filter(snapshot -> sessionId == null || sessionId.equals(snapshot.sessionId()))
+                .max(java.util.Comparator.comparing(AgentSnapshot::createdAt)));
+    }
 }

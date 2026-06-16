@@ -7,4 +7,6 @@ public interface SnapshotStore {
     Mono<Void> save(AgentSnapshot snapshot);
 
     Mono<AgentSnapshot> load(String snapshotId);
+
+    Mono<AgentSnapshot> findLatest(String sessionId);
 }

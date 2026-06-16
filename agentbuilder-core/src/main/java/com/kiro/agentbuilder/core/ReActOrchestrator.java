@@ -21,7 +21,8 @@ public class ReActOrchestrator {
     }
 
     public Mono<FinalPayload> orchestrate(ExecutionContext context, FluxSink<AgentEvent> sink) {
-        return runIteration(context, sink, 0)
+        int initialIteration = ((Number) context.attributes().getOrDefault(RuntimeAttributes.CURRENT_ITERATION, 0)).intValue();
+        return runIteration(context, sink, initialIteration)
                 .then(Mono.defer(() -> Mono.justOrEmpty((FinalPayload) context.attributes().get(RuntimeAttributes.TERMINAL_PAYLOAD))))
                 .switchIfEmpty(Mono.error(new IllegalStateException("Orchestration completed without terminal payload")));
     }
