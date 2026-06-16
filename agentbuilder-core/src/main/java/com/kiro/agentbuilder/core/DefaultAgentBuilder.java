@@ -161,7 +161,14 @@ public class DefaultAgentBuilder implements AgentBuilder {
                 ? configuration.createAuthenticationService() : authenticationService;
         AuthorizationService resolvedAuthorization = authorizationService == null
                 ? configuration.createAuthorizationService() : authorizationService;
-        ModelProvider resolvedModelProvider = modelProvider == null ? configuration.createModelProvider() : modelProvider;
+        ModelProvider baseModelProvider = modelProvider == null ? configuration.createModelProvider() : modelProvider;
+        ModelProvider resolvedModelProvider = baseModelProvider instanceof ResilienceModelProvider
+                ? baseModelProvider
+                : new ResilienceModelProvider(
+                        baseModelProvider,
+                        new CircuitBreaker(5, Duration.ofSeconds(30)),
+                        new RateLimiter(20, Duration.ofSeconds(1)),
+                        RetryPolicy.forModelCalls());
 
         List<ExecutionGuard> resolvedGuards = new ArrayList<>(guards);
         resolvedGuards.add(new RecursionDepthGuard(maxRecursionDepth));

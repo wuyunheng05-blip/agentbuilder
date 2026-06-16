@@ -17,6 +17,7 @@ public class ToolGateway {
     private final com.kiro.agentbuilder.api.spi.AuthorizationService authorizationService;
     private final PolicyEngine policyEngine;
     private final JsonSchemaValidator schemaValidator;
+    private final RetryPolicy retryPolicy;
     private final Map<String, ToolResult> idempotentCache = new ConcurrentHashMap<>();
 
     public ToolGateway(
@@ -25,11 +26,22 @@ public class ToolGateway {
             com.kiro.agentbuilder.api.spi.AuthorizationService authorizationService,
             PolicyEngine policyEngine,
             JsonSchemaValidator schemaValidator) {
+        this(toolRegistry, interceptorChain, authorizationService, policyEngine, schemaValidator, RetryPolicy.forToolCalls());
+    }
+
+    public ToolGateway(
+            ToolRegistry toolRegistry,
+            InterceptorChain interceptorChain,
+            com.kiro.agentbuilder.api.spi.AuthorizationService authorizationService,
+            PolicyEngine policyEngine,
+            JsonSchemaValidator schemaValidator,
+            RetryPolicy retryPolicy) {
         this.toolRegistry = toolRegistry;
         this.interceptorChain = interceptorChain;
         this.authorizationService = authorizationService;
         this.policyEngine = policyEngine;
         this.schemaValidator = schemaValidator;
+        this.retryPolicy = retryPolicy;
     }
 
     public Mono<ToolResult> execute(ToolCall call, ExecutionContext context) {
@@ -57,8 +69,8 @@ public class ToolGateway {
                                     return Mono.just(ToolResult.error(call.callId(), policyResult.reason()));
                                 }
                                 schemaValidator.validate(tool.getParameterSchema(), call.arguments());
-                                return tool.execute(call, context)
-                                        .timeout(policyResult.timeout())
+                                return retryPolicy.executeMono(() -> tool.execute(call, context)
+                                                .timeout(policyResult.timeout()))
                                         .flatMap(result -> interceptorChain.afterToolCall(context, result));
                             })
                             .doOnNext(result -> {
