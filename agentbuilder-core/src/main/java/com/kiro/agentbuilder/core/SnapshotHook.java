@@ -40,6 +40,11 @@ public class SnapshotHook implements LifecycleHook {
 
     @Override
     public void onError(ExecutionContext context, Throwable error) {
+        if (error instanceof HitlPauseException
+                && context.attributes().get(SnapshotAttributes.LATEST_SNAPSHOT_ID) != null
+                && context.attributes().get(RuntimeAttributes.PENDING_APPROVAL_REQUEST_ID) != null) {
+            return;
+        }
         saveSnapshot(context, error instanceof HitlPauseException ? "APPROVAL_REQUIRED" : "ERROR");
     }
 

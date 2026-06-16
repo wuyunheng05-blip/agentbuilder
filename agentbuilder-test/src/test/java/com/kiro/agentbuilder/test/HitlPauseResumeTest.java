@@ -13,6 +13,8 @@ import com.kiro.agentbuilder.api.model.event.AgentEvent;
 import com.kiro.agentbuilder.api.model.event.AgentEventType;
 import com.kiro.agentbuilder.api.model.event.ApprovalRequiredPayload;
 import com.kiro.agentbuilder.api.model.event.FinalPayload;
+import com.kiro.agentbuilder.api.storage.ApprovalRequest;
+import com.kiro.agentbuilder.api.storage.ApprovalStatus;
 import com.kiro.agentbuilder.api.storage.AgentSnapshot;
 import com.kiro.agentbuilder.api.tool.JsonSchema;
 import com.kiro.agentbuilder.api.tool.RiskLevel;
@@ -125,6 +127,15 @@ class HitlPauseResumeTest {
         AgentSnapshot snapshot = config.storageModule().snapshotStore().load(payload.snapshotId()).block();
         assertNotNull(snapshot);
         assertEquals("APPROVAL_REQUIRED", snapshot.triggerType());
+        ApprovalRequest request = config.storageModule().approvalStore().get(payload.approvalRequestId()).block();
+        assertNotNull(request);
+        assertEquals(ApprovalStatus.PENDING, request.status());
+        assertEquals(payload.snapshotId(), request.snapshotId());
+        assertEquals(1, config.storageModule().approvalStore().queryPending("hitl-session").collectList().block().size());
+
+        config.storageModule().approvalStore()
+                .resolve(payload.approvalRequestId(), ApprovalStatus.APPROVED, "approved from store")
+                .block();
 
         List<AgentEvent> resumedEvents = agent.resume(
                         payload.snapshotId(),
@@ -132,9 +143,7 @@ class HitlPauseResumeTest {
                                 "",
                                 "hitl-session",
                                 "user-1",
-                                Map.of(
-                                        "approvalRequestId", payload.approvalRequestId(),
-                                        "approved", true)))
+                                Map.of("approvalRequestId", payload.approvalRequestId())))
                 .collectList()
                 .block();
 
@@ -146,5 +155,6 @@ class HitlPauseResumeTest {
         assertEquals("approved-final", finalPayload.content());
         assertEquals(1, toolExecutions.get());
         assertTrue(resumedEvents.stream().noneMatch(event -> event.type() == AgentEventType.APPROVAL_REQUIRED));
+        assertEquals(0, config.storageModule().approvalStore().queryPending("hitl-session").collectList().block().size());
     }
 }

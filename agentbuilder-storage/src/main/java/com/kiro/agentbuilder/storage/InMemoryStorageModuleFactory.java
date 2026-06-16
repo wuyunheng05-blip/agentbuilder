@@ -17,6 +17,7 @@ public class InMemoryStorageModuleFactory implements StorageModuleFactory {
                 new InMemoryMemoryStore(),
                 new InMemorySnapshotStore(),
                 new InMemoryObservabilityStore(),
-                new InMemoryOutboxStore());
+                new InMemoryOutboxStore(),
+                new InMemoryApprovalStore());
     }
 }

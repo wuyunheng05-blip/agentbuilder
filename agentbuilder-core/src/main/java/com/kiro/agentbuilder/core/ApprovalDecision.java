@@ -1,5 +1,7 @@
 package com.kiro.agentbuilder.core;
 
+import com.kiro.agentbuilder.api.storage.ApprovalStatus;
+
 public record ApprovalDecision(
         ApprovalStatus status,
         String reason,

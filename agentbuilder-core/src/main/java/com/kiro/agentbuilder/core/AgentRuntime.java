@@ -51,7 +51,10 @@ public class AgentRuntime implements Agent {
                 toolRegistry,
                 interceptorChain,
                 config.authorizationService(),
-                new PolicyEngine(new PausingHitlHandler()),
+                new PolicyEngine(new PausingHitlHandler(
+                        config.storageModule().approvalStore(),
+                        config.storageModule().snapshotStore(),
+                        snapshotMapper)),
                 new JsonSchemaValidator());
         this.promptComposer = new PromptComposer(config, new ContextWindowManager(10));
         this.orchestrator = new ReActOrchestrator(buildPhases());

@@ -6,7 +6,8 @@ public record StorageModule(
         com.kiro.agentbuilder.api.memory.MemoryStore memoryStore,
         SnapshotStore snapshotStore,
         ObservabilityStore observabilityStore,
-        OutboxStore outboxStore) {
+        OutboxStore outboxStore,
+        ApprovalStore approvalStore) {
 
     public static StorageModule inMemory() {
         return create("in-memory");
